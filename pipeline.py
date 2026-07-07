@@ -1,8 +1,8 @@
 from main_class import HandlePopulations
 
 polygons_names = [
-    'alegre',
-    #'anutiba',
+    #'alegre',
+    'anutiba',
     #'ararai',
     #'cafe',
     #'celina',

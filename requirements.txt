@@ -6,5 +6,11 @@ numpy==2.5.0
 osmnx==2.1.0
 pandas==3.0.3
 PuLP==3.3.2
+pyarrow==24.0.0
+fastparquet==2026.5.0
+pyogrio==0.13.0
+pyproj==3.7.2
+scikit-learn==1.9.0
+scipy==1.18.0
 shapely==2.1.2
 tqdm==4.68.3

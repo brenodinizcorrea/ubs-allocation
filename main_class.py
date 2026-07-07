@@ -22,6 +22,8 @@ class HandlePopulations:
 
     def __init__(self, polygons_names):
         self.pipeline_step_log = '\n[Pipeline Step]: '
+        self.folder_results_summary = 'results-summary'
+        self.folder_html = 'html'
         self.polygons_names = polygons_names
         self.polygons = {}
         self.populations_points = {}
@@ -52,7 +54,7 @@ class HandlePopulations:
                 
             print(f'Initializing the experiment for {polygon_name}...\n')
 
-            file = Path(f'results/{polygon_name}.txt')
+            file = Path(f'{self.folder_results_summary}/{polygon_name}.txt')
     
             datetime_now = datetime.now()
             datetime_now = datetime_now.strftime("%A, %B %d, %Y at %I:%M %p")
@@ -88,7 +90,7 @@ class HandlePopulations:
         
             area_km2 = polygon_metric.area.iloc[0] / 1_000_000
 
-            write_results_path = Path(f'results/{polygon_name}.txt')
+            write_results_path = Path(f'{self.folder_results_summary}/{polygon_name}.txt')
 
             text_block = (
                 f'\nArea Total (km2): {area_km2}'
@@ -240,7 +242,7 @@ class HandlePopulations:
                 population_points_polygon.to_csv(population_points_path, index=False)
             
 
-            write_results_path = Path(f'results/{polygon_name}.txt')
+            write_results_path = Path(f'{self.folder_results_summary}/{polygon_name}.txt')
 
             text_block = (
                 f'\nPopulation Total: {population_points_polygon['population_2020'].sum()}'
@@ -629,7 +631,7 @@ class HandlePopulations:
 
     def real_capacity_write(self, polygon_name):
 
-        file = Path(f'results/{polygon_name}.txt')
+        file = Path(f'{self.folder_results_summary}/{polygon_name}.txt')
 
         text_block = (
 
@@ -680,7 +682,7 @@ class HandlePopulations:
             self.possible_locations[polygon_name].plot(
             ax=ax,
             color="green",
-            markersize=5,
+            markersize=15,
             alpha=0.7,
             zorder=3
             )
@@ -782,14 +784,10 @@ class HandlePopulations:
                 columns={"geometry": "population_geometry"}
             )
 
-            print(populations)
-
             optimal_assigment = populations.join(
                 optimal_assigment.set_index("id_population"),
                 how="left"
             )
-            
-            print(optimal_assigment)
 
             optimal_assigment = optimal_assigment.merge(
                 self.possible_locations[polygon_name][["id", "geometry"]],
@@ -804,10 +802,7 @@ class HandlePopulations:
                 columns={
                     "geometry": "location_geometry"
                 }
-            )
-            
-            print(optimal_assigment)
-            
+            )            
 
             optimal_assigment["line_to_location"] = optimal_assigment.apply(
                 lambda row: (
@@ -855,7 +850,7 @@ class HandlePopulations:
 
     def maximum_capacity_write(self, polygon_name):
 
-        file = Path(f'results/{polygon_name}.txt')
+        file = Path(f'{self.folder_results_summary}/{polygon_name}.txt')
 
         text_block = (
 
@@ -962,7 +957,7 @@ class HandlePopulations:
                     fill_opacity=0.4
                 ).add_to(m)
     
-            map_path = f"output/{polygon_name}_map.html"
+            map_path = f"html/{polygon_name}_map.html"
     
             m.save(map_path)
     
