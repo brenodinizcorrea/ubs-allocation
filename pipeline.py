@@ -29,16 +29,8 @@ handle_populations.get_real_distance_and_cost_matrix()
 
 handle_populations.get_real_ubs_capacity(print_results=True)
 
-#handle_populations.plot_initial_data()
-#
-#handle_populations.pmedian_apply()
-#
-#handle_populations.pmedian_results_print()
-#
-#handle_populations.pmedian_results_plot()
-#
-#handle_populations.pmedian_results_generate_html()
-#
+handle_populations.plot_initial_data()
+
 handle_populations.maximum_capacity_apply(use_cplex=False, print_results=False)
-#
+
 handle_populations.maximum_capacity_results_html()
