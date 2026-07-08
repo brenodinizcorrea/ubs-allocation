@@ -23,3 +23,10 @@ Thumbs.db
 
 # Arquivos de Variáveis de Ambiente (Segurança)
 .env
+
+results-summary/*.txt
+
+html/*.html
+
+data/*
+!data/real-locations.csv

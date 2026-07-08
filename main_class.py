@@ -180,12 +180,16 @@ class HandlePopulations:
                 )
             else:
                 print(f'Not found in {population_points_path}. Calculating...')
+
+                if not hasattr(self, "population_points_brazil"):
         
-                population_points_brazil = pd.read_parquet("raw-data/population_bra_southeast_2018-10-01.parquet")
-                population_points_brazil_geometry = [Point(xy) for xy in zip(population_points_brazil['longitude'], population_points_brazil['latitude'])]
-                population_points_brazil = gpd.GeoDataFrame(population_points_brazil, geometry=population_points_brazil_geometry, crs="EPSG:4326")
+                    population_points_brazil = pd.read_parquet("raw-data/population_bra_southeast_2018-10-01.parquet")
+                    population_points_brazil_geometry = [Point(xy) for xy in zip(population_points_brazil['longitude'], population_points_brazil['latitude'])]
+                    population_points_brazil = gpd.GeoDataFrame(population_points_brazil, geometry=population_points_brazil_geometry, crs="EPSG:4326")
+
+                    self.population_points_brazil = population_points_brazil
         
-                population_points_polygon = population_points_brazil[population_points_brazil.within(self.polygons[polygon_name].union_all())]
+                population_points_polygon = self.population_points_brazil[self.population_points_brazil.within(self.polygons[polygon_name].union_all())]
                 population_points_polygon = population_points_polygon.reset_index(drop=True)
 
                 nodes_df = pd.DataFrame(
@@ -815,8 +819,6 @@ class HandlePopulations:
                 ),
                 axis=1
             )
-            
-            print(optimal_assigment)
 
             self.maximum_capacity[polygon_name]['assignment'] = optimal_assigment
 

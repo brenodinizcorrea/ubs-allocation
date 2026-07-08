@@ -3,12 +3,12 @@ from main_class import HandlePopulations
 polygons_names = [
     #'alegre',
     'anutiba',
-    #'ararai',
-    #'cafe',
-    #'celina',
-    #'rive',
-    #'santaangelica',
-    #'santaangelica'
+    'ararai',
+    'cafe',
+    'celina',
+    'rive',
+    'santaangelica',
+    'santaangelica'
 ]
 
 handle_populations = HandlePopulations(polygons_names)
