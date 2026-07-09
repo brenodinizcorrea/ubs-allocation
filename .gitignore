@@ -30,4 +30,6 @@ html/*.html
 
 figures/*.png
 
-data/*
+data/*.csv
+data/*.parquet
+data/*.graphml
