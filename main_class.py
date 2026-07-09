@@ -7,6 +7,7 @@ import numpy as np
 import time
 import folium
 from shapely.geometry import mapping
+import math
 
 from pathlib import Path
 from shapely import wkt
@@ -18,12 +19,186 @@ from shapely.ops import unary_union
 
 tqdm.pandas()
 
+import math
+import geopandas as gpd
+from shapely.geometry import Point
+
+
+def add_displaced_markers(
+    dataframe,
+    geometry_column,
+    map_object,
+    color,
+    popup,
+    threshold_meters=50,
+    displacement_meters=100,
+):
+    gdf = dataframe.copy()
+
+    gdf = (
+        gdf
+        .set_geometry(geometry_column)
+        .set_crs(4326)
+        .to_crs(31984)
+    )
+
+    gdf['geometry'] = gdf[geometry_column]
+
+    used_points = []
+
+    for _, row in gdf.iterrows():
+
+        point = row.geometry
+
+        display = point
+
+        overlaps = 0
+
+        for previous in used_points:
+            if point.distance(previous) <= threshold_meters:
+                overlaps += 1
+
+        if overlaps > 0:
+
+            #angle = overlaps * math.pi / 3
+
+            display = Point(
+                point.x - displacement_meters,
+                point.y,
+            )
+
+            real = (
+                gpd.GeoSeries([point], crs=31984)
+                .to_crs(4326)
+                .iloc[0]
+            )
+
+            disp = (
+                gpd.GeoSeries([display], crs=31984)
+                .to_crs(4326)
+                .iloc[0]
+            )
+
+            folium.PolyLine(
+                [
+                    [real.y, real.x],
+                    [disp.y, disp.x],
+                ],
+                color='black',
+                weight=2,
+                opacity=0.8,
+                dash_array="5, 8",  # linha pontilhada
+            ).add_to(map_object)
+
+            display = disp
+
+        else:
+
+            display = (
+                gpd.GeoSeries([display], crs=31984)
+                .to_crs(4326)
+                .iloc[0]
+            )
+
+        folium.Marker(
+            location=[display.y, display.x],
+            icon=folium.Icon(
+                color=color,
+                icon="map-marker",
+                prefix="fa"
+            ),
+            popup=popup
+        ).add_to(map_object)
+
+        used_points.append(point)
+
+
+def plot_displaced_points(
+    gdf,
+    ax,
+    color="red",
+    threshold_meters=50,
+    displacement_meters=500,
+    markersize=50,
+    linewidth=1,
+):
+
+    original_crs = gdf.crs
+
+    # CRS em metros
+    gdf_metric = gdf.to_crs(31984).copy()
+
+    used_points = []
+
+    for idx, row in gdf_metric.iterrows():
+
+        point = row.geometry
+
+        overlaps = 0
+
+        for previous in used_points:
+            if point.distance(previous) <= threshold_meters:
+                overlaps += 1
+
+        real = (
+            gpd.GeoSeries([point], crs=31984)
+            .to_crs(original_crs)
+            .iloc[0]
+        )
+
+        if overlaps > 0:
+
+            displaced = Point(
+                point.x - displacement_meters,
+                point.y,
+            )
+
+            displaced = (
+                gpd.GeoSeries([displaced], crs=31984)
+                .to_crs(original_crs)
+                .iloc[0]
+            )
+
+            ax.plot(
+                [real.x, displaced.x],
+                [real.y, displaced.y],
+                color="black",
+                linestyle="--",
+                linewidth=linewidth,
+                zorder=2,
+            )
+
+            ax.scatter(
+                displaced.x,
+                displaced.y,
+                s=markersize,
+                color=color,
+                edgecolor="black",
+                zorder=4,
+            )
+
+        else:
+
+            ax.scatter(
+                real.x,
+                real.y,
+                s=markersize,
+                color=color,
+                edgecolor="black",
+                zorder=4,
+            )
+
+        used_points.append(point)
+
+
 class HandlePopulations:
+
 
     def __init__(self, polygons_names):
         self.pipeline_step_log = '\n[Pipeline Step]: '
         self.folder_results_summary = 'results-summary'
         self.folder_html = 'html'
+        self.folder_figures = 'figures'
         self.polygons_names = polygons_names
         self.polygons = {}
         self.populations_points = {}
@@ -113,6 +288,8 @@ class HandlePopulations:
                 print(f'Reading from {road_graph_inside_polygon_path}')
                 road_graph_inside_polygon = ox.load_graphml(road_graph_inside_polygon_path)
                 nodes, edges = ox.graph_to_gdfs(road_graph_inside_polygon)
+                print(nodes)
+                print(edges)
             else:
                 print(f'Not found in {road_graph_inside_polygon_path}. Calculating...')
                 road_graph_inside_polygon = ox.graph_from_polygon(
@@ -371,10 +548,8 @@ class HandlePopulations:
                 distance_matrix.to_parquet(distance_matrix_path, index=False)
             
             self.distance_matrix[polygon_name] = distance_matrix
-            print(self.distance_matrix[polygon_name])
 
             distance_matrix = distance_matrix.dropna(axis=1, how="all")
-            print(distance_matrix)
 
 
     def get_real_locations_raw(self):
@@ -462,7 +637,7 @@ class HandlePopulations:
                 lambda p: ox.distance.nearest_nodes(self.road_graph_border_rectangle_polygon[polygon_name], p.x, p.y)
             )
 
-            real_locations['nearest_location'] = (real_locations['nearest_location'].astype('Int64'))
+            real_locations['nearest_location'] = pd.to_numeric(real_locations['nearest_location'], errors='coerce').astype('Int64')
 
             self.real_locations[polygon_name] = real_locations
 
@@ -527,24 +702,12 @@ class HandlePopulations:
             self.real_cost_matrix[polygon_name] = cost_matrix
             self.real_cost[polygon_name] = cost_matrix[self.real_locations_ids[polygon_name]].min(axis=1).sum()
 
-            print(self.real_locations)
-            print(self.real_locations_ids[polygon_name])
-            print(len(self.real_locations_ids[polygon_name]))
-            print(self.real_distance_matrix)
-            #print(self.real_cost_matrix)
-
 
     def get_real_ubs_capacity(self, use_cplex=False, print_results=False):
                 
         for polygon_name in self.polygons_names:
 
             self.real_capacity[polygon_name] = {}
-
-            print(f'{self.pipeline_step_log}Getting real capacity of {polygon_name}...\n')
-            
-            print('Total Population: ', self.real_distance_matrix[polygon_name]['population_2020'].sum())
-
-            prob = LpProblem("Max-Capacity-Problem", LpMaximize)
 
             populations_ids = self.real_distance_matrix[polygon_name]["id_population"].tolist()
             populations = self.real_distance_matrix[polygon_name]["population_2020"].tolist()
@@ -553,6 +716,26 @@ class HandlePopulations:
             locations_ids = self.real_distance_matrix[polygon_name].columns[2:].astype(int).tolist()
             locations_quantity = len(locations_ids)
             distances = self.real_distance_matrix[polygon_name].iloc[:, 2:].to_numpy(dtype=np.float32)
+
+            if locations_quantity == 0:
+                self.real_capacity[polygon_name]['assignment'] = 'NA'
+                self.real_capacity[polygon_name]['locations'] = locations_ids
+                self.real_capacity[polygon_name]['populations_quantity'] = populations_quantity
+                self.real_capacity[polygon_name]['variables_quantity'] = 'NA'
+                self.real_capacity[polygon_name]['constraints_quantity'] = 'NA'
+                self.real_capacity[polygon_name]['optimization_status'] = 'NA'
+                self.real_capacity[polygon_name]['optimization_time'] = 'NA'
+                self.real_capacity[polygon_name]['cost'] = 0
+
+                self.real_capacity_write(polygon_name)
+                if print_results:
+                    self.real_capacity_print(polygon_name)
+                continue
+
+
+            print(f'{self.pipeline_step_log}Getting real capacity of {polygon_name}...\n')
+
+            prob = LpProblem("Max-Capacity-Problem", LpMaximize)
 
             var_X = {
                 (i, j): LpVariable(f"x_{i}_{j}", cat=LpBinary)
@@ -593,7 +776,6 @@ class HandlePopulations:
             optimization_time_start = time.time()
             prob.solve(solver)
             optimization_time_end = time.time()
-            print('prob.solve(solver): ', time.time() - optimization_time_start)
 
             optimal_assigment = pd.DataFrame(
                 [
@@ -605,7 +787,6 @@ class HandlePopulations:
             ).sort_values("id_population").reset_index(drop=True)
 
             self.real_capacity[polygon_name]['assignment'] = optimal_assigment
-
             self.real_capacity[polygon_name]['locations'] = locations_ids
             self.real_capacity[polygon_name]['populations_quantity'] = populations_quantity
             self.real_capacity[polygon_name]['variables_quantity'] = len(prob.variables())
@@ -616,7 +797,6 @@ class HandlePopulations:
 
             self.real_capacity_write(polygon_name)
             if print_results:
-
                 self.real_capacity_print(polygon_name)
 
 
@@ -654,7 +834,7 @@ class HandlePopulations:
             f.write(text_block)
 
 
-    def plot_initial_data(self):
+    def plot_initial_data(self, data_to_plot='real-and-possible-locations'):
 
         for polygon_name in self.polygons_names:
     
@@ -666,30 +846,45 @@ class HandlePopulations:
                 edgecolor="black",
                 linewidth=2
             )
+
+            #if len(self.real_capacity[polygon_name]['locations']) > 0:
+            #    self.real_locations[polygon_name][self.real_locations[polygon_name]['polygon_name'] == polygon_name].plot(
+            #    ax=ax,
+            #    color="red",
+            #    markersize=50,
+            #    alpha=1,
+            #    zorder=3
+            #    )
+
+            if len(self.real_capacity[polygon_name]['locations']) > 0:
+                plot_displaced_points(
+                    self.real_locations[polygon_name][
+                        self.real_locations[polygon_name]["polygon_name"] == polygon_name
+                    ],
+                    ax=ax,
+                    color="red",
+                    threshold_meters=50,
+                    displacement_meters=300,
+                    markersize=80,
+                )
+
+            if data_to_plot == 'population-points':
+                self.populations_points[polygon_name].plot(
+                ax=ax,
+                color="blue",
+                markersize=10,
+                alpha=0.7,
+                zorder=3
+                )
     
-            self.real_locations[polygon_name][self.real_locations[polygon_name]['polygon_name'] == polygon_name].plot(
-            ax=ax,
-            color="yellow",
-            markersize=50,
-            alpha=1,
-            zorder=3
-            )
-    
-            self.populations_points[polygon_name].plot(
-            ax=ax,
-            color="red",
-            markersize=5,
-            alpha=0.7,
-            zorder=3
-            )
-    
-            self.possible_locations[polygon_name].plot(
-            ax=ax,
-            color="green",
-            markersize=15,
-            alpha=0.7,
-            zorder=3
-            )
+            if data_to_plot == 'real-and-possible-locations':
+                self.possible_locations[polygon_name].plot(
+                ax=ax,
+                color="green",
+                markersize=25,
+                alpha=0.7,
+                zorder=3
+                )
     
             self.edges_border_rectangle_polygon[polygon_name].plot(
             ax=ax,
@@ -704,8 +899,19 @@ class HandlePopulations:
                 color="gray",
                 linewidth=0.5
             )
+
+            ax.set_axis_off()
+            
+            plt.savefig(
+                f'{self.folder_figures}/{polygon_name}-{data_to_plot}.png',
+                dpi=300,
+                bbox_inches="tight",
+                pad_inches=0
+            )
         
-            plt.show()
+            #plt.show()
+
+            plt.close()
 
 
     def maximum_capacity_apply(self, use_cplex=False, print_results=False):
@@ -750,12 +956,14 @@ class HandlePopulations:
                     if (i, j) in var_X:
                         prob += var_X.get((i, j), 0) <= var_y[j]
 
-            prob += lpSum(var_y[j] for j in range(locations_quantity)) == len(self.real_locations_ids[polygon_name])# + 1
-
+            prob += lpSum(var_y[j] for j in range(locations_quantity)) == (
+                1 if len(self.real_locations_ids[polygon_name]) == 0 else len(self.real_locations_ids[polygon_name])
+            )
+            
             if use_cplex:
                 solver = CPLEX_CMD(
                     #path='',
-                    msg=True
+                    #msg=True
                 )
             else:
                 solver = PULP_CBC_CMD(
@@ -773,7 +981,6 @@ class HandlePopulations:
             optimization_time_start = time.time()
             prob.solve(solver)
             optimization_time_end = time.time()
-            print('prob.solve(solver): ', time.time() - optimization_time_start)
 
             optimal_assigment = pd.DataFrame(
                 [
@@ -829,6 +1036,7 @@ class HandlePopulations:
             self.maximum_capacity[polygon_name]['optimization_status'] = LpStatus[prob.status]
             self.maximum_capacity[polygon_name]['optimization_time'] = optimization_time_end - optimization_time_start
             self.maximum_capacity[polygon_name]['optimal_locations'] = set(self.maximum_capacity[polygon_name]['assignment']['id_location'].dropna().to_list())
+            print(prob.objective.value())
             self.maximum_capacity[polygon_name]['cost'] = "{:.2f}".format(prob.objective.value())
 
             self.maximum_capacity_write(polygon_name)
@@ -906,17 +1114,16 @@ class HandlePopulations:
             locations = self.real_locations[polygon_name][
                 self.real_locations[polygon_name]["polygon_name"] == polygon_name
             ]
-    
-            for _, row in locations.iterrows():
-                folium.Marker(
-                    location=[row.geometry.y, row.geometry.x],
-                    icon=folium.Icon(
-                        color="red",
-                        icon="map-marker",
-                        prefix="fa"
-                    ),
-                    popup="UBS atual"
-                ).add_to(m)
+
+            add_displaced_markers(
+                dataframe=locations,
+                geometry_column="geometry",
+                map_object=m,
+                color="red",
+                popup="UBS atual",
+                threshold_meters=50,
+                displacement_meters=300,
+            )
     
             assignment = self.maximum_capacity[polygon_name]["assignment"]
     
@@ -925,17 +1132,22 @@ class HandlePopulations:
                 .drop_duplicates(subset=["id_location"])
                 .dropna(subset=["location_geometry"])
             )
-    
-            for _, row in unique_locations.iterrows():
-                folium.Marker(
-                    location=[row.location_geometry.y, row.location_geometry.x],
-                    icon=folium.Icon(
-                        color="green",
-                        icon="map-marker",
-                        prefix="fa"
-                    ),
-                    popup="UBS otimizada"
-                ).add_to(m)
+
+            unique_locations = gpd.GeoDataFrame(
+                {"location_geometry": unique_locations["location_geometry"]},
+                geometry="location_geometry",
+                crs=4326
+            )
+
+            add_displaced_markers(
+                dataframe=unique_locations,
+                geometry_column="location_geometry",
+                map_object=m,
+                color="green",
+                popup="UBS otimizada",
+                threshold_meters=50,
+                displacement_meters=100,
+            )
     
             served_assignment = assignment.dropna(subset=["location_geometry"])
     
@@ -962,5 +1174,3 @@ class HandlePopulations:
             map_path = f"html/{polygon_name}_map.html"
     
             m.save(map_path)
-    
-            print(f"Mapa salvo em: {map_path}")

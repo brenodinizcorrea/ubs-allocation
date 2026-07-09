@@ -1,14 +1,14 @@
 from main_class import HandlePopulations
 
 polygons_names = [
-    #'alegre',
-    'anutiba',
-    'ararai',
-    'cafe',
-    'celina',
-    'rive',
-    'santaangelica',
-    'santaangelica'
+    'alegre',
+    #'anutiba',
+    #'ararai',
+    #'cafe',
+    #'celina',
+    #'rive',
+    #'santaangelica',
+    #'saojoao'
 ]
 
 handle_populations = HandlePopulations(polygons_names)
@@ -27,7 +27,7 @@ handle_populations.get_real_locations()
 
 handle_populations.get_real_distance_and_cost_matrix()
 
-handle_populations.get_real_ubs_capacity(print_results=True)
+handle_populations.get_real_ubs_capacity(print_results=False)
 
 handle_populations.plot_initial_data()
 

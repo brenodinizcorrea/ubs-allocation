@@ -28,5 +28,6 @@ results-summary/*.txt
 
 html/*.html
 
+figures/*.png
+
 data/*
-!data/real-locations.csv
